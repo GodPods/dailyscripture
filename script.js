@@ -22,12 +22,30 @@ function computeRefsFromParts(m,d){const proverbChapter=d;let psalmChapter=(m*d)
 function bgUrl(book,chapter){const q=encodeURIComponent(`${book} ${chapter}`);return`https://www.biblegateway.com/passage/?search=${q}`;}
 function setLoading(which,on){(which==='prov'?provStatus:psStatus).textContent=on?'Loading…':'';}
 
-async function apiBible(path,params={}){
-  if(!PROXY_BASE)throw new Error('Proxy not configured.');
-  const url=new URL(PROXY_BASE.replace(/\/$/,'')+path);
-  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
-  const r=await fetch(url.toString(),{headers:{Accept:'application/json'}});
-  if(!r.ok)throw new Error(`API ${r.status}`);
+// Accepts either absolute (https://...workers.dev) or relative (/.netlify/functions/...) PROXY_BASE
+async function apiBible(path, params = {}) {
+  const baseRaw = (PROXY_BASE || '').trim();
+  if (!baseRaw) throw new Error('Proxy not configured. Set PROXY_BASE.');
+
+  // normalize base and path
+  const base = baseRaw.endsWith('/') ? baseRaw.slice(0, -1) : baseRaw;
+  const p = path.startsWith('/') ? path : `/${path}`;
+
+  // If base is absolute, use it directly; if it's relative, resolve against current origin
+  let url;
+  try {
+    // Try as absolute first
+    url = new URL(base + p);
+  } catch {
+    // Fallback: treat base as relative to current origin
+    url = new URL(base + p, window.location.origin);
+  }
+
+  // add query params
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+
+  const r = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`API ${r.status}`);
   return r.json();
 }
 
