@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daily Proverbs & Psalms — API.Bible Version</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>Daily Proverbs & Psalms</h1>
+    <p class="subtitle">Proverb = day of month · Psalm = month × day (wrap &gt; 150 to 1–150)</p>
+  </header>
+
+  <main class="container">
+    <section class="controls">
+      <div class="control-row">
+        <label for="dateInput" class="label">Select Date</label>
+        <input type="date" id="dateInput" />
+        <button id="todayBtn" class="btn">Today</button>
+        <button id="loadBtn" class="btn primary">Load Readings</button>
+      </div>
+
+      <div class="control-row">
+        <label for="versionSelect" class="label">Version</label>
+        <select id="versionSelect" class="select"></select>
+        <span class="hint">Versions are loaded from API.Bible using your key.</span>
+      </div>
+    </section>
+
+    <section id="cards" class="grid">
+      <article class="card" id="card-proverbs">
+        <div class="card-head">
+          <h2>Proverbs <span id="provRef"></span></h2>
+          <div class="links">
+            <a id="provGateway" class="link" target="_blank" rel="noopener">Open on Bible Gateway</a>
+            <button class="btn small" data-copy-target="provText">Copy</button>
+          </div>
+        </div>
+        <div id="provStatus" class="status"></div>
+        <pre id="provText" class="passage"></pre>
+      </article>
+
+      <article class="card" id="card-psalms">
+        <div class="card-head">
+          <h2>Psalms <span id="psRef"></span></h2>
+          <div class="links">
+            <a id="psGateway" class="link" target="_blank" rel="noopener">Open on Bible Gateway</a>
+            <button class="btn small" data-copy-target="psText">Copy</button>
+          </div>
+        </div>
+        <div id="psStatus" class="status"></div>
+        <pre id="psText" class="passage"></pre>
+      </article>
+    </section>
+
+    <footer class="site-footer">
+      <p>© <span id="year"></span> Daily Proverbs & Psalms · GitHub Pages</p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
