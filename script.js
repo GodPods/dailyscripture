@@ -60,16 +60,15 @@ async function loadVersions(){
   }
 }
 
-// Robust passage fetch for API.Bible (camelCase query keys + fallbacks)
+// Robust passage fetch for API.Bible (correct hyphenated query keys + fallbacks)
 async function fetchPassage(bibleId, reference) {
-  // one shot at /passages
   async function getPass(refStr) {
     const resp = await apiBible(`/v1/bibles/${bibleId}/passages`, {
       reference: refStr,
-      contentType: 'text',           // ✅ camelCase
-      includeVerseNumbers: 'true',   // ✅ camelCase
-      includeTitles: 'false',        // ✅ camelCase
-      includeNotes: 'false'          // ✅ camelCase
+      'content-type': 'text',          // ✅ hyphenated per docs
+      'include-verse-numbers': 'true', // ✅
+      'include-titles': 'false',       // ✅
+      'include-notes': 'false'         // ✅
     });
     const content =
       resp?.data?.content ||
@@ -82,7 +81,7 @@ async function fetchPassage(bibleId, reference) {
   let content = await getPass(reference);
   if (content) return content;
 
-  // 2) Psalm/Psalms & Proverb/Proverbs toggles
+  // 2) Toggle common book-name variants
   const swaps = {
     'Psalm ':   'Psalms ',
     'Psalms ':  'Psalm ',
@@ -96,7 +95,7 @@ async function fetchPassage(bibleId, reference) {
     }
   }
 
-  // 3) Fallback: /search -> use first hit's reference back into /passages
+  // 3) Fallback: search → feed first hit back into /passages
   const search = await apiBible(`/v1/bibles/${bibleId}/search`, {
     query: reference,
     limit: '1'
