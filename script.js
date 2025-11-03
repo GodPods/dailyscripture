@@ -1,5 +1,5 @@
 // Daily Proverbs & Psalms — API.Bible Version Dropdown
-const PROXY_BASE = "https://wispy-dawn-9d94.jrusso440.workers.dev/"; // Set to your proxy (Cloudflare Worker / Netlify Function)
+const PROXY_BASE = "https://wispy-dawn-9d94.jrusso440.workers.dev"; // Set to your proxy (Cloudflare Worker / Netlify Function)
 
 const dateInput=document.getElementById('dateInput');
 const todayBtn=document.getElementById('todayBtn');
