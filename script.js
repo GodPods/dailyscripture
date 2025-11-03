@@ -117,34 +117,70 @@ async function fetchPassage(bibleId, reference) {
 }
 
 
-async function loadForMD(m,d){
-  const bibleId=versionSelect?.value;
-  if(!bibleId)return;
-  const{proverbChapter,psalmChapter}=computeRefsFromParts(m,d);
-  provRef.textContent=proverbChapter;
-  psRef.textContent=psalmChapter;
-  provGateway.href=bgUrl('Proverbs',proverbChapter);
-  psGateway.href=bgUrl('Psalm',psalmChapter);
-  provText.textContent='';psText.textContent='';setLoading('prov',true);setLoading('ps',true);
-  try{
-    const[prov,ps]=await Promise.all([
-      fetchPassage(bibleId,`Proverbs ${proverbChapter}`),
-      fetchPassage(bibleId,`Psalm ${psalmChapter}`)
+// Load passages for a given month/day using the selected API.Bible version.
+// Assumes: computeRefsFromParts, bgUrl, setLoading, fetchPassage, loadVersions,
+// and the DOM refs (versionSelect, provRef, psRef, provText, psText, provGateway, psGateway) exist.
+async function loadForMD(m, d) {
+  // Basic guard
+  if (!m || !d) return;
+
+  // Ensure we have a selected Bible/version (populate if needed)
+  let bibleId = versionSelect?.value;
+  if (!bibleId) {
+    await loadVersions();      // fills the dropdown from /v1/bibles
+    bibleId = versionSelect?.value;
+    if (!bibleId) {
+      // Friendly message if versions couldn't load
+      const msg = 'No Bible versions available (check proxy URL and API key).';
+      if (provText) provText.textContent = msg;
+      if (psText)   psText.textContent   = msg;
+      return;
+    }
+  }
+
+  // Compute the Proverb/Psalm for this date
+  const { proverbChapter, psalmChapter } = computeRefsFromParts(m, d);
+
+  // Update headings and outbound links
+  if (provRef)     provRef.textContent = proverbChapter;
+  if (psRef)       psRef.textContent   = psalmChapter;
+  if (provGateway) provGateway.href    = bgUrl('Proverbs', proverbChapter);
+  if (psGateway)   psGateway.href      = bgUrl('Psalm',    psalmChapter);
+
+  // Prep UI
+  if (provText) provText.textContent = '';
+  if (psText)   psText.textContent   = '';
+  setLoading('prov', true);
+  setLoading('ps',   true);
+
+  try {
+    // Try to fetch both passages (robust fetchPassage handles Psalm/Psalms, search fallback, etc.)
+    const [prov, ps] = await Promise.all([
+      fetchPassage(bibleId, `Proverbs ${proverbChapter}`),
+      fetchPassage(bibleId, `Psalm ${psalmChapter}`)
     ]);
-    provText.textContent=`Proverbs ${proverbChapter}\n\n${prov}`;
-    psText.textContent=`Psalm ${psalmChapter}\n\n${ps}`;
-  }catch(e){
-    console.error(e);
-    const msg='Could not load from API.Bible (check proxy/key). Use BibleGateway link above.';
-    provText.textContent=msg;psText.textContent=msg;
-  }finally{
-    setLoading('prov',false);setLoading('ps',false);
+
+    if (provText) provText.textContent = `Proverbs ${proverbChapter}\n\n${(prov || '').trim()}`;
+    if (psText)   psText.textContent   = `Psalm ${psalmChapter}\n\n${(ps || '').trim()}`;
+  } catch (err) {
+    console.error(err);
+    const msg = 'Could not load from API.Bible (check proxy URL and API key). Use the BibleGateway link above.';
+    if (provText && !provText.textContent) provText.textContent = msg;
+    if (psText   && !psText.textContent)   psText.textContent   = msg;
+  } finally {
+    setLoading('prov', false);
+    setLoading('ps',   false);
   }
 }
 
 function setTodayInput(){const{y,m,d}=todayYMD();dateInput.value=`${y}-${pad(m)}-${pad(d)}`;}
 todayBtn.addEventListener('click',()=>{setTodayInput();const{m,d}=readInputYMD();loadForMD(m,d);});
 loadBtn.addEventListener('click',()=>{if(!dateInput.value)setTodayInput();const{m,d}=readInputYMD();loadForMD(m,d);});
-versionSelect.addEventListener('change',()=>{const{m,d}=readInputYMD();if(m&&d)loadForMD(m,d);});
+//versionSelect.addEventListener('change',()=>{const{m,d}=readInputYMD();if(m&&d)loadForMD(m,d);});
+versionSelect.addEventListener('change', () => {
+  const { m, d } = readInputYMD();
+  if (m && d) loadForMD(m, d);
+});
+
 
 (async function init(){setTodayInput();await loadVersions();const{m,d}=readInputYMD();loadForMD(m,d);})();
