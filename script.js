@@ -68,17 +68,54 @@ async function loadVersions(){
   }
 }
 
-async function fetchPassage(bibleId,reference){
-  const resp=await apiBible(`/v1/bibles/${bibleId}/passages`,{
-    reference,
-    'content-type':'text',
-    'include-verse-numbers':'true',
-    'include-titles':'false',
-    'include-notes':'false'
+// Robust passage fetch: try common reference spellings, then fall back via /search
+async function fetchPassage(bibleId, reference) {
+  // helper to call /passages once
+  async function getPass(refStr) {
+    const resp = await apiBible(`/v1/bibles/${bibleId}/passages`, {
+      reference: refStr,
+      'content-type': 'text',
+      'include-verse-numbers': 'true',
+      'include-titles': 'false',
+      'include-notes': 'false'
+    });
+    const content = resp?.data?.content || resp?.data?.passages?.[0]?.content || '';
+    return (content || '').trim();
+  }
+
+  // 1) try as-is
+  let content = await getPass(reference);
+  if (content) return content;
+
+  // 2) Psalm/Psalms toggle (and Proverb/Proverbs just in case)
+  const swaps = {
+    'Psalm ': 'Psalms ',
+    'Psalms ': 'Psalm ',
+    'Proverb ': 'Proverbs ',
+    'Proverbs ': 'Proverb '
+  };
+  for (const [a, b] of Object.entries(swaps)) {
+    if (reference.startsWith(a)) {
+      content = await getPass(reference.replace(a, b));
+      if (content) return content;
+    }
+  }
+
+  // 3) Fallback via /search → reuse first hit's reference back into /passages
+  //    This helps when the API wants a slightly different canonical ref.
+  const search = await apiBible(`/v1/bibles/${bibleId}/search`, {
+    query: reference,
+    limit: 1
   });
-  const content=resp?.data?.content||resp?.data?.passages?.[0]?.content||'';
-  return content||'(No content returned)';
+  const ref = search?.data?.verses?.[0]?.reference;
+  if (ref) {
+    content = await getPass(ref);
+    if (content) return content;
+  }
+
+  return '(No content returned for this reference.)';
 }
+
 
 async function loadForMD(m,d){
   const bibleId=versionSelect?.value;
