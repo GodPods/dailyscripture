@@ -21,6 +21,7 @@ function readInputYMD(){if(!dateInput.value)return todayYMD();const[y,m,d]=dateI
 function computeRefsFromParts(m,d){const proverbChapter=d;let psalmChapter=(m*d)%150;if(psalmChapter===0)psalmChapter=150;return{proverbChapter,psalmChapter};}
 function bgUrl(book,chapter){const q=encodeURIComponent(`${book} ${chapter}`);return`https://www.biblegateway.com/passage/?search=${q}`;}
 function setLoading(which,on){(which==='prov'?provStatus:psStatus).textContent=on?'Loading…':'';}
+const DEBUG_LOG = true;
 
 // Accept absolute (https://…workers.dev) or relative (/.netlify/functions/…)
 async function apiBible(path, params = {}) {
@@ -30,13 +31,18 @@ async function apiBible(path, params = {}) {
   const p = path.startsWith('/') ? path : `/${path}`;
 
   let url;
-  try { url = new URL(base + p); }
-  catch { url = new URL(base + p, window.location.origin); }
+  try { url = new URL(base + p); }                // absolute (Worker)
+  catch { url = new URL(base + p, location.origin); } // relative (Netlify)
 
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
+  if (DEBUG_LOG) console.log('[apiBible] GET', url.toString());
   const r = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
-  if (!r.ok) throw new Error(`API ${r.status}`);
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    if (DEBUG_LOG) console.error('[apiBible] HTTP', r.status, body);
+    throw new Error(`API ${r.status}`);
+  }
   return r.json();
 }
 
@@ -60,15 +66,16 @@ async function loadVersions(){
   }
 }
 
-// Robust passage fetch for API.Bible (correct hyphenated query keys + fallbacks)
+// Robust passage fetch for API.Bible (hyphenated params per docs)
 async function fetchPassage(bibleId, reference) {
   async function getPass(refStr) {
     const resp = await apiBible(`/v1/bibles/${bibleId}/passages`, {
       reference: refStr,
-      'content-type': 'text',          // ✅ hyphenated per docs
-      'include-verse-numbers': 'true', // ✅
-      'include-titles': 'false',       // ✅
-      'include-notes': 'false'         // ✅
+      'content-type': 'text',          // <- correct names
+      'include-verse-numbers': 'true',
+      'include-titles': 'false',
+      'include-notes': 'false'
+      // optional: 'fums-version': '3'   // fair use meta (optional)
     });
     const content =
       resp?.data?.content ||
@@ -77,16 +84,16 @@ async function fetchPassage(bibleId, reference) {
     return (content || '').trim();
   }
 
-  // 1) try as-is
+  // 1) as-is
   let content = await getPass(reference);
   if (content) return content;
 
-  // 2) Toggle common book-name variants
+  // 2) Psalm/Psalms & Proverb/Proverbs toggles
   const swaps = {
-    'Psalm ':   'Psalms ',
-    'Psalms ':  'Psalm ',
+    'Psalm ': 'Psalms ',
+    'Psalms ': 'Psalm ',
     'Proverb ': 'Proverbs ',
-    'Proverbs ':'Proverb '
+    'Proverbs ': 'Proverb '
   };
   for (const [a, b] of Object.entries(swaps)) {
     if (reference.startsWith(a)) {
@@ -95,7 +102,7 @@ async function fetchPassage(bibleId, reference) {
     }
   }
 
-  // 3) Fallback: search → feed first hit back into /passages
+  // 3) Fallback: /search → feed first hit back into /passages
   const search = await apiBible(`/v1/bibles/${bibleId}/search`, {
     query: reference,
     limit: '1'
