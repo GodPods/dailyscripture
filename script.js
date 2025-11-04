@@ -55,35 +55,63 @@ async function apiBible(path, params = {}) {
   try { return JSON.parse(text); } catch { return { data: null }; }
 }
 
-// ---------- Versions ----------
-async function loadVersions(){
+// Try a tiny probe request to confirm a version works (fetch Proverbs 1 as text)
+async function isVersionUsable(bibleId) {
+  try {
+    const resp = await apiBible(`/v1/bibles/${bibleId}/chapters/PRO.1`, {
+      'content-type': 'text',
+      'include-verse-numbers': 'false',
+      'include-titles': 'false',
+      'include-notes': 'false'
+    });
+    // If there's any text content, we consider this version usable
+    const content = resp?.data?.content || resp?.data?.passages?.[0]?.content || '';
+    return !!String(content).trim();
+  } catch {
+    return false;
+  }
+}
+
+// ---------- Versions (populates, then prunes unusable entries) ----------
+async function loadVersions() {
   versionSelect.innerHTML = '<option>Loading…</option>';
   try {
     const data = await apiBible('/v1/bibles', { language: 'eng' });
-    let list = data?.data || [];
+    const list = (data?.data || []).filter(b => b?.id && (b.abbreviation || b.name));
 
-    // ✅ Filter out the first entry or any without abbreviation/name
-    list = list.filter((b, i) => i > 0 && b.abbreviation && b.name);
-
+    // Fill the dropdown first
     versionSelect.innerHTML = '';
     for (const b of list) {
       const opt = document.createElement('option');
       opt.value = b.id;
-      opt.textContent = b.abbreviation
-        ? `${b.abbreviation} — ${b.name}`
-        : b.name;
+      opt.textContent = b.abbreviation ? `${b.abbreviation} — ${b.name}` : b.name;
       versionSelect.appendChild(opt);
     }
 
-    // Optionally auto-select the first valid version
-    if (list.length) versionSelect.value = list[0].id;
+    // Now verify top-down and remove any that fail the chapter probe
+    let selectedSet = false;
+    for (const opt of Array.from(versionSelect.options)) {
+      const ok = await isVersionUsable(opt.value);
+      if (ok && !selectedSet) {
+        versionSelect.value = opt.value;     // pick the first usable one
+        selectedSet = true;
+      }
+      if (!ok) {
+        // Remove unusable option from the list
+        opt.remove();
+      }
+    }
+
+    if (!selectedSet) {
+      versionSelect.innerHTML = '<option>No working versions for this API key</option>';
+    }
 
   } catch (e) {
     console.error(e);
-    versionSelect.innerHTML =
-      '<option>Error loading versions (check proxy/key)</option>';
+    versionSelect.innerHTML = '<option>Error loading versions (check proxy/key)</option>';
   }
 }
+
 
 // ---------- Chapter fetch via USFM (no reference=) ----------
 const USFM = { Proverbs: 'PRO', Proverb: 'PRO', Psalms: 'PSA', Psalm: 'PSA' };
