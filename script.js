@@ -58,19 +58,30 @@ async function apiBible(path, params = {}) {
 // ---------- Versions ----------
 async function loadVersions(){
   versionSelect.innerHTML = '<option>Loading…</option>';
-  try{
+  try {
     const data = await apiBible('/v1/bibles', { language: 'eng' });
-    const list = data?.data || [];
+    let list = data?.data || [];
+
+    // ✅ Filter out the first entry or any without abbreviation/name
+    list = list.filter((b, i) => i > 0 && b.abbreviation && b.name);
+
     versionSelect.innerHTML = '';
     for (const b of list) {
       const opt = document.createElement('option');
       opt.value = b.id;
-      opt.textContent = b.abbreviation ? `${b.abbreviation} — ${b.name}` : b.name;
+      opt.textContent = b.abbreviation
+        ? `${b.abbreviation} — ${b.name}`
+        : b.name;
       versionSelect.appendChild(opt);
     }
-  }catch(e){
+
+    // Optionally auto-select the first valid version
+    if (list.length) versionSelect.value = list[0].id;
+
+  } catch (e) {
     console.error(e);
-    versionSelect.innerHTML = '<option>Error loading versions (check proxy/key)</option>';
+    versionSelect.innerHTML =
+      '<option>Error loading versions (check proxy/key)</option>';
   }
 }
 
