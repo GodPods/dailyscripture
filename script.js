@@ -66,54 +66,84 @@ async function loadVersions(){
   }
 }
 
-// Robust passage fetch for API.Bible (hyphenated params per docs)
+// Map common names to USFM book IDs
+const USFM = {
+  'Proverbs': 'PRO', 'Proverb': 'PRO',
+  'Psalms':   'PSA', 'Psalm':   'PSA'
+};
+
+// Fetch a whole chapter via /chapters/{chapterId} (preferred), with fallbacks
 async function fetchPassage(bibleId, reference) {
-  async function getPass(refStr) {
-    const resp = await apiBible(`/v1/bibles/${bibleId}/passages`, {
-      reference: refStr,
-      'content-type': 'text',          // <- correct names
-      'include-verse-numbers': 'true',
-      'include-titles': 'false',
-      'include-notes': 'false'
-      // optional: 'fums-version': '3'   // fair use meta (optional)
-    });
-    const content =
-      resp?.data?.content ||
-      resp?.data?.passages?.[0]?.content ||
-      '';
-    return (content || '').trim();
-  }
+  // reference is like "Proverbs 3" or "Psalm 33"
+  const [bookName, chapStr] = reference.split(/\s+/);
+  const chapter = String(chapStr || '').trim();
+  const usfmBook = USFM[bookName];
 
-  // 1) as-is
-  let content = await getPass(reference);
-  if (content) return content;
-
-  // 2) Psalm/Psalms & Proverb/Proverbs toggles
-  const swaps = {
-    'Psalm ': 'Psalms ',
-    'Psalms ': 'Psalm ',
-    'Proverb ': 'Proverbs ',
-    'Proverbs ': 'Proverb '
-  };
-  for (const [a, b] of Object.entries(swaps)) {
-    if (reference.startsWith(a)) {
-      content = await getPass(reference.replace(a, b));
-      if (content) return content;
+  // 1) Preferred: /chapters/USFM.CHAPTER
+  if (usfmBook && chapter) {
+    const chapterId = `${usfmBook}.${chapter}`;
+    try {
+      const resp = await apiBible(`/v1/bibles/${bibleId}/chapters/${chapterId}`, {
+        'content-type': 'text',
+        'include-verse-numbers': 'true',
+        'include-titles': 'false',
+        'include-notes': 'false'
+      });
+      const content =
+        resp?.data?.content ||
+        resp?.data?.passages?.[0]?.content ||
+        '';
+      if (content && content.trim()) return content.trim();
+    } catch (e) {
+      // fall through to other strategies
+      console.warn('[chapters] failed for', chapterId, e);
     }
   }
 
-  // 3) Fallback: /search → feed first hit back into /passages
-  const search = await apiBible(`/v1/bibles/${bibleId}/search`, {
-    query: reference,
-    limit: '1'
-  });
-  const ref = search?.data?.verses?.[0]?.reference;
-  if (ref) {
-    content = await getPass(ref);
-    if (content) return content;
+  // 2) Fallback: /passages?reference=... (hyphenated params, in case this bibleId accepts it)
+  try {
+    const pass = await apiBible(`/v1/bibles/${bibleId}/passages`, {
+      reference,
+      'content-type': 'text',
+      'include-verse-numbers': 'true',
+      'include-titles': 'false',
+      'include-notes': 'false'
+    });
+    const content =
+      pass?.data?.content ||
+      pass?.data?.passages?.[0]?.content ||
+      '';
+    if (content && content.trim()) return content.trim();
+  } catch (e) {
+    console.warn('[passages] failed for', reference, e);
   }
 
-  return '(No content returned for this reference.)';
+  // 3) Last resort: /search → reuse first result’s reference back into /passages
+  try {
+    const search = await apiBible(`/v1/bibles/${bibleId}/search`, {
+      query: reference,
+      limit: '1'
+    });
+    const ref = search?.data?.verses?.[0]?.reference;
+    if (ref) {
+      const pass2 = await apiBible(`/v1/bibles/${bibleId}/passages`, {
+        reference: ref,
+        'content-type': 'text',
+        'include-verse-numbers': 'true',
+        'include-titles': 'false',
+        'include-notes': 'false'
+      });
+      const content =
+        pass2?.data?.content ||
+        pass2?.data?.passages?.[0]?.content ||
+        '';
+      if (content && content.trim()) return content.trim();
+    }
+  } catch (e) {
+    console.warn('[search fallback] failed for', reference, e);
+  }
+
+  return '(No content returned for this chapter.)';
 }
 
 async function loadForMD(m, d) {
